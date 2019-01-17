@@ -3,6 +3,7 @@ module Main where
 import Control.Monad (forM_)
 
 import Unscramble
+import Unscramble.Wave
 
 main :: IO ()
 main = do
@@ -12,7 +13,7 @@ main = do
     let samples = channel ch arr
     key <- guessKey samples
     print (toList key)
-    writeChannel ("test" ++ show ch ++ "-orig.bin")
-                 samples
-    writeChannel ("test" ++ show ch ++ ".bin")
-                 (unscramble key samples)
+    writeChannelWave ("test" ++ show ch ++ "-orig.wav")
+                     samples
+    writeChannelWave ("test" ++ show ch ++ ".wav")
+                     (unscramble key samples)

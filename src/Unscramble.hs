@@ -4,7 +4,7 @@
 
 module Unscramble
 ( Sample
-, readOriginal, writeChannel
+, readOriginal, writeChannelRaw
 , channel
 , unscramble, guessKey
 , toList
@@ -32,9 +32,9 @@ readOriginal f = do
   let shape = ix2 (fromIntegral len `div` 8) 8
   transpose <$> readArrayFromStorableFile f shape
 
-writeChannel :: Source r Sample
+writeChannelRaw :: Source r Sample
              => FilePath -> Array r DIM1 Sample -> IO ()
-writeChannel = writeArrayToStorableFile
+writeChannelRaw = writeArrayToStorableFile
 
 channel :: Source r Sample
         => Int
