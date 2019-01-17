@@ -1,0 +1,3 @@
+*.bin
+.stack-work/
+unscramble-sleep-data.cabal
