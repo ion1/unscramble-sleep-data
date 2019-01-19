@@ -17,6 +17,7 @@ import Data.Array.Repa as Repa
 import Data.Array.Repa.IO.Binary
 import Data.Array.Repa.Repr.Unboxed (fromUnboxed, toUnboxed)
 import Data.Bits
+import Data.List (foldl')
 import Data.Maybe
 import Data.Semigroup (Arg (..), Min (..))
 import qualified Data.Vector.Unboxed as VU
@@ -109,11 +110,11 @@ evaluateKeyGuess arr cursor guess = sumAllS diffs
         -- (a xor unknown) xor (b xor unknown xor guess) = a xor b xor guess.
         -- Given that we don't know the unknown value yet, estimate the
         -- difference based on the highest bit set in a xor b xor guess.
-        go a b = bitDiff (a `xor` b `xor` guess)
+        go a b = fromIntegral (msbValue (a `xor` b `xor` guess))
           where
-            bitDiff :: Word8 -> Integer
-            bitDiff 0 = 0
-            bitDiff x = 2 ^ (finiteBitSize x - 1 - countLeadingZeros x)
+            msbValue :: Word8 -> Word8
+            msbValue n = n .&. complement mask
+              where mask = (foldl' (.|.) 0 . P.map (n `shiftR`)) [1 .. finiteBitSize n - 1]
 
     prevSamples = backpermute (ix1 numSamples) (\(Z :. s) -> Z :. prevFirst + 64 * s) arr
     currSamples = backpermute (ix1 numSamples) (\(Z :. s) -> Z :. currFirst + 64 * s) arr
