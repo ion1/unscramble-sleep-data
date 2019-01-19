@@ -13,7 +13,6 @@ main = do
     let samples = channel ch arr
     key <- guessKey samples
     print (toList key)
-    writeChannelWave ("test" ++ show ch ++ "-orig.wav")
-                     samples
-    writeChannelWave ("test" ++ show ch ++ ".wav")
-                     (unscramble key samples)
+    writeChannelRaw  ("ch" ++ show ch ++ "-key.bin")  key
+    writeChannelWave ("ch" ++ show ch ++ "-orig.wav") samples
+    writeChannelWave ("ch" ++ show ch ++ ".wav")      (unscramble key samples)
