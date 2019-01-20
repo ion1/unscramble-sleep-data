@@ -21,16 +21,14 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
-- repa
-- repa-io
+- massiv
 - vector
+- vector-mmap
 - wave
 
 ghc-options:
 - -Wall
-# REPA recommends:
-- -O2 -fno-liberate-case -funfolding-use-threshold1000 -funfolding-keeness-factor1000
-# REPA also recommends: -fllvm -optlo-O3
+- -O2
 
 library:
   source-dirs: src
