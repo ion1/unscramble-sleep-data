@@ -144,14 +144,33 @@ validateIx name sz ix
   | otherwise = errorIx name sz ix
 {-# INLINE validateIx #-}
 
-minimize :: Comp -> Ix1 -> (Ix1 -> a) -> (a -> Integer) -> a
+-- | Given a loss evaluation function, find the input that minimizes
+-- the loss.
+minimize :: Comp            -- ^ Computation strategy
+         -> Ix1             -- ^ Number of values to evaluate
+         -> (Ix1 -> a)      -- ^ Mapping from an index to the value being evaluated
+         -> (a -> Integer)  -- ^ Loss evaluation function
+         -> a               -- ^ Input that minimizes the loss
 minimize comp sz fromIx evalLoss =
+  snd (minimize' comp D sz fromIx evalLoss)
+
+-- | Given a loss evaluation function, find the input that minimizes
+-- the loss. Returns an array of all the losses as well as the minimal
+-- input. If you discard the array, use `D` as the representation so
+-- no manifest array will be computed.
+minimize' :: Source r Ix1 Integer
+          => Comp                      -- ^ Computation strategy
+          -> r                         -- ^ Array representation
+          -> Ix1                       -- ^ Number of values to evaluate
+          -> (Ix1 -> a)                -- ^ Mapping from an index to the value being evaluated
+          -> (a -> Integer)            -- ^ Loss evaluation function
+          -> (Array r Ix1 Integer, a)  -- ^ Array of losses, input that minimizes the loss
+minimize' comp r sz fromIx evalLoss =
   case ifoldMono (\ix loss -> Just (Min (Arg loss (fromIx ix)))) losses of
-    Just (Min (Arg _ value)) -> value
+    Just (Min (Arg _ value)) -> (losses, value)
     Nothing -> error "minimize: empty array"
   where
-    losses :: Array D Ix1 Integer
-    losses = makeArrayR D comp sz (evalLoss . fromIx)
+    losses = makeArrayR r comp sz (evalLoss . fromIx)
 
 -- | Estimate the magnitude of an unsigned integer by its most
 -- significant set bit. Knowing an `a xor z` and a `b xor z`,
