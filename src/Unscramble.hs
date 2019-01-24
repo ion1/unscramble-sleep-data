@@ -69,31 +69,54 @@ forEachChannel_ :: Applicative f
                 -> f ()
 forEachChannel_ sig f = F.traverse_ (\ch -> f ch (sig !> ch)) $ take (outerLength sig) [0..]
 
-recoverKey :: Array M Ix1 Sample  -- ^ Encrypted signal
-           -> Array U Ix1 Sample  -- ^ Recovered key
-recoverKey sig = keyWith $ minimize Par 256 fromIntegral evaluateConstant
+recoverKey :: Array M Ix1 Sample             -- ^ Encrypted signal
+           -> Array U Ix1 Sample             -- ^ Recovered key
+recoverKey sig = recoverKey' (\a b -> fromIntegral (msbValue (b `xor` a))) sig
+  where
+    -- | Estimate the magnitude of an unsigned integer by its most
+    -- significant set bit. Knowing an `a xor z` and a `b xor z`,
+    -- this enables one to roughly estimate the absolute difference
+    -- between `a` and `b` without knowing `z` because
+    -- `msbValue ((a xor z) `xor` (b xor z)) == msbValue (a xor b)`.
+    msbValue :: Word8 -> Word8
+    msbValue n = n .&. complement mask
+      where mask = (foldl' (.|.) 0 . P.map (n `shiftR`)) [1 .. finiteBitSize n - 1]
+    {-# INLINE msbValue #-}
+
+recoverKey' :: (Sample -> Sample -> Integer)  -- ^ Absolute difference function
+            -> Array M Ix1 Sample             -- ^ Encrypted signal
+            -> Array U Ix1 Sample             -- ^ Recovered key
+recoverKey' diff sig = dKeyToKey constant dKey
+  where
+    constant = recoverConstant dKey sig
+    dKey = makeArrayR U Seq 64 (\cursor -> recoverDKeyAt diff cursor sig)
+
+recoverConstant :: Array U Ix1 Sample  -- ^ Δkey
+                -> Array M Ix1 Sample  -- ^ Encrypted signal
+                -> Sample              -- ^ Recovered constant
+recoverConstant dKey sig = minimize Par 256 fromIntegral evaluateConstant
   where
     evaluateConstant :: Sample   -- ^ A guess for constant
                      -> Integer  -- ^ A loss estimate
     evaluateConstant guess
       = A.sum . A.map abs . derivative . A.map fromIntegral
-      $ applyKeyD (keyWith guess) sig
+      $ applyKeyD (dKeyToKey guess dKey) sig
 
-    -- | The key is a xor "integral" of Δkey, thus it's floating on
-    -- top of some constant. Compute the key given the constant.
-    keyWith :: Sample -> Array U Ix1 Sample
-    keyWith constant = fromVector Seq (size dKey)
-                     . VU.postscanl' xor constant
-                     . toVector
-                     $ dKey
+    derivative :: (Source r Ix1 a, Source (EltRepr r Ix1) Ix1 a, Num a)
+               => Array r Ix1 a -> Array D Ix1 a
+    derivative sig' = A.zipWith subtract sig' sig'Tail
+      where
+        sig'Tail = extract' 1 (size sig' - 1) sig'
 
-    dKey = makeArrayR U Seq 64 (`recoverDKeyAt` sig)
-
-derivative :: (Source r Ix1 a, Source (EltRepr r Ix1) Ix1 a, Num a)
-           => Array r Ix1 a -> Array D Ix1 a
-derivative sig = A.zipWith subtract sig sigTail
-  where
-    sigTail = extract' 1 (size sig - 1) sig
+-- | The key is a xor "integral" of Δkey, thus it's floating on top
+-- of some constant. Compute the key given the constant.
+dKeyToKey :: Sample              -- ^ Constant
+          -> Array U Ix1 Sample  -- ^ Δkey
+          -> Array U Ix1 Sample  -- ^ Key
+dKeyToKey constant dKey = fromVector Seq (size dKey)
+                        . VU.postscanl' xor constant
+                        . toVector
+                        $ dKey
 
 applyKey :: Array U Ix1 Sample  -- ^ Key
          -> Array M Ix1 Sample  -- ^ Encrypted signal
@@ -107,17 +130,17 @@ applyKeyD key sig = setComp Seq $ A.zipWith xor keyRepeated sig
   where
     keyRepeated = backpermute (size sig) (`mod` 64) key
 
-recoverDKeyAt :: Ix1                 -- ^ Key index (0…63)
-              -> Array M Ix1 Sample  -- ^ Encrypted signal
-              -> Sample              -- ^ Estimated Δkey[k]
-recoverDKeyAt cursor sig = minimize Par 256 fromIntegral evaluateGuess
+recoverDKeyAt :: (Sample -> Sample -> Integer)  -- ^ Absolute difference function
+              -> Ix1                            -- ^ Key index (0…63)
+              -> Array M Ix1 Sample             -- ^ Encrypted signal
+              -> Sample                         -- ^ Estimated Δkey[k]
+recoverDKeyAt diff cursor sig = minimize Par 256 fromIntegral evaluateGuess
   where
     evaluateGuess :: Sample   -- ^ A guess for Δkey[k] (0…255)
                   -> Integer  -- ^ A loss estimate
     evaluateGuess guess
       = A.sum . setComp Seq
-      $ A.zipWith (\a b -> fromIntegral (msbValue (a `xor` b `xor` guess)))
-                  prevSamples currSamples
+      $ A.zipWith (\a b -> diff a (b `xor` guess)) prevSamples currSamples
 
     -- Samples at [64n+cursor-1] for all n.
     prevSamples = backpermute samplesSz (\n -> prevFirst + 64*n) sig
@@ -171,13 +194,3 @@ minimize' comp r sz fromIx evalLoss =
     Nothing -> error "minimize: empty array"
   where
     losses = makeArrayR r comp sz (evalLoss . fromIx)
-
--- | Estimate the magnitude of an unsigned integer by its most
--- significant set bit. Knowing an `a xor z` and a `b xor z`,
--- this enables one to roughly estimate the absolute difference
--- between `a` and `b` without knowing `z` because
--- `msbValue ((a xor z) `xor` (b xor z)) == msbValue (a xor b)`.
-msbValue :: Word8 -> Word8
-msbValue n = n .&. complement mask
-  where mask = (foldl' (.|.) 0 . P.map (n `shiftR`)) [1 .. finiteBitSize n - 1]
-{-# INLINE msbValue #-}
