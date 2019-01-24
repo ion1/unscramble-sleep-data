@@ -189,8 +189,39 @@ minimize' :: Source r Ix1 Integer
           -> (a -> Integer)            -- ^ Loss evaluation function
           -> (Array r Ix1 Integer, a)  -- ^ Array of losses, input that minimizes the loss
 minimize' comp r sz fromIx evalLoss =
-  case ifoldMono (\ix loss -> Just (Min (Arg loss (fromIx ix)))) losses of
+  case ifoldMono (\ix loss -> (Just . Min . Arg loss . fromIx) ix) losses of
     Just (Min (Arg _ value)) -> (losses, value)
     Nothing -> error "minimize: empty array"
   where
     losses = makeArrayR r comp sz (evalLoss . fromIx)
+
+    {-                  .-^     -~.
+                            ' |      `
+                    r`               `
+                   [     r  '    V\ [
+                   ]    ]'     '  *
+                   [ \  [   `    'j
+                    . M `      ,
+                      'g   ---    '
+                        .       ,`
+                       {  `~  -`
+                   .' ]~,'"\~
+                  '   `     ,
+                 `   /                 . ` -`
+               ,                ,\^"'      ,,,L            ..,
+               /' .~<        \/      ^^x..~ \         '         '.
+                r      L       `-...-^               L.j,.        \
+               `\ `, ,                            . W              w
+                '^     ,. ~~. '           ,-^"`    "  `.**~~,     ' ]"`
+                   .            ',.-7 C` /.      C[   `          `
+      ,..=~- ^^"` `              `` [   ?                           /
+               '                       .     ., L    '  .      >
+                              j   '.            `` ~  .-~~~. ^
+                              r      '      "^-~~..^     ';,A,
+                     .=~--~      '   `               .^
+             --  `            r          "C"""7`     '``        ````'^
+    ..    ----------`          -          [   ````-,....  --------
+    ````````       [          `->. ^ ,....----= =^   '"`""""`L         ] [
+          }        `              ] j`',`     ] |                ----- | `
+    -                ]   ''``       j.^       | |
+          [       ,  /-             }         [ |                       -}
